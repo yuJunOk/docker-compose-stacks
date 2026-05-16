@@ -1,0 +1,268 @@
+services:
+  langfuse-web:
+    image: selectdb/langfuse-web:latest
+    container_name: langfuse-web
+    hostname: langfuse-web
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      doris_fe:
+        condition: service_healthy
+      doris_be:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment: &langfuse-web-env
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/postgres
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-debug-secret-key-here-must-be-long-enough}
+      SALT: ${SALT:-your-super-secret-salt-with-at-least-32-characters-for-encryption}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:clickhouse@localhost:9000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://localhost:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: ${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_EVENT_UPLOAD_REGION:-us-east-1}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: ${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: ${REDIS_AUTH:-myredissecret}
+      REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED:-false}
+      REDIS_TLS_CA: ${REDIS_TLS_CA:-}
+      REDIS_TLS_CERT: ${REDIS_TLS_CERT:-}
+      REDIS_TLS_KEY: ${REDIS_TLS_KEY:-}
+
+      # Time zone configuration
+      TZ: Asia/Shanghai
+
+      LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED: true
+
+      LANGFUSE_ENABLE_BACKGROUND_MIGRATIONS: false
+
+      LANGFUSE_AUTO_DORIS_MIGRATION_DISABLED: false
+
+      # Doris configuration
+      LANGFUSE_ANALYTICS_BACKEND: ${LANGFUSE_ANALYTICS_BACKEND:-doris}
+      DORIS_URL: ${DORIS_FE_HTTP_URL:-}
+      DORIS_FE_HTTP_URL: ${DORIS_FE_HTTP_URL:-http://172.30.0.2:8030}
+      DORIS_FE_QUERY_PORT: ${DORIS_FE_QUERY_PORT:-9030}
+      DORIS_DB: ${DORIS_DB:-langfuse}
+      DORIS_USER: ${DORIS_USER:-root}
+      DORIS_PASSWORD: ${DORIS_PASSWORD:-}
+      DORIS_MAX_OPEN_CONNECTIONS: ${DORIS_MAX_OPEN_CONNECTIONS:-100}
+      DORIS_REQUEST_TIMEOUT_MS: ${DORIS_REQUEST_TIMEOUT_MS:-30000}
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--timeout=10", "http://127.0.0.1:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - default
+      - doris_internal
+
+  langfuse-worker:
+    image: selectdb/langfuse-worker:latest
+    container_name: langfuse-worker
+    hostname: langfuse-worker
+    depends_on: *langfuse-depends-on
+    ports:
+      - "3030:3030"
+    environment:
+      <<: *langfuse-web-env
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep 'node worker/dist/index.js' | grep -v grep || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - default
+      - doris_internal
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: langfuse-minio
+    hostname: langfuse-minio
+    restart: always
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+    ports:
+      - 19090:9000
+      - 127.0.0.1:19091:9001
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+
+  redis:
+    image: redis:7-alpine
+    container_name: langfuse-redis
+    hostname: langfuse-redis
+    restart: always
+    # 密码只能由 redis-server 的 --requirepass 生效；镜像不会用环境变量自动设密码。
+    # 下面 REDIS_AUTH 与 command 同源（.env 或默认），供 healthcheck 里 redis-cli -a 使用。
+    environment:
+      REDIS_AUTH: ${REDIS_AUTH:-myredissecret}
+    command: >
+      --requirepass ${REDIS_AUTH:-myredissecret}
+    # 宿主机端口默认 16379，避免与本机常见 Redis 6379 冲突（可在 .env 改 LANGFUSE_REDIS_HOST_PORT）
+    ports:
+      - "127.0.0.1:${LANGFUSE_REDIS_HOST_PORT:-16379}:6379"
+    # 镜像声明 VOLUME /data；用 tmpfs 占位，避免产生匿名哈希卷（数据仍只在内存，重启即丢）
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_AUTH\" ping | grep -q PONG"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: langfuse-postgres
+    hostname: langfuse-postgres
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    # 官方镜像启动脚本只读 POSTGRES_*，无需再写 command。
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    # 宿主机端口默认 15432，避免与本机已在跑的 PostgreSQL（常见 5432）冲突
+    ports:
+      - "127.0.0.1:${LANGFUSE_PG_HOST_PORT:-15432}:5432"
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+
+  doris_fe:
+    image: apache/doris:fe-2.1.11
+    hostname: doris_fe
+    container_name: doris_fe
+    restart: unless-stopped
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - FE_ID=1
+      - DORIS_ROOT_PASSWORD=${DORIS_PASSWORD:-}
+    ports:
+      - "8030:8030"
+      - "9030:9030"
+      - "9010:9010"
+    networks:
+      # 与 Langfuse 共用 default，JDBC Catalog 才能访问 langfuse-postgres；doris_internal 保留固定 IP 供 FE/BE 集群通信
+      default: {}
+      doris_internal:
+        ipv4_address: 172.30.0.2
+    volumes:
+      - doris_fe_meta:/opt/apache-doris/fe/doris-meta
+      - ./doris-config/fe_custom.conf:/opt/apache-doris/fe/conf/fe_custom.conf:ro
+      # jar 放在与 compose 同目录的 doris-config/jdbc_drivers/；改挂载后须 --force-recreate doris_fe（仅 restart 不会挂上）
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          if [ -n "$$DORIS_ROOT_PASSWORD" ]; then export MYSQL_PWD="$$DORIS_ROOT_PASSWORD"; fi
+          && mysql -h 127.0.0.1 -P 9030 -uroot -e 'SELECT 1' 2>/dev/null || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  doris_be:
+    image: apache/doris:be-2.1.11
+    hostname: doris_be
+    container_name: doris_be
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - BE_ADDR=172.30.0.3:9050
+      - DORIS_ROOT_PASSWORD=${DORIS_PASSWORD:-}
+    depends_on:
+      doris_fe:
+        condition: service_healthy
+    ports:
+      - "8040:8040"
+      - "8060:8060"
+      - "9050:9050"
+      - "9060:9060"
+    networks:
+      # JDBC 外查在 BE 上执行：须能访问 Postgres（default）且能读到与 FE 相同路径的驱动 jar
+      default: {}
+      doris_internal:
+        ipv4_address: 172.30.0.3
+    volumes:
+      - doris_be_storage:/opt/apache-doris/be/storage
+      # 与 doris_fe 相同挂载路径，否则 BE 报 Failed to open URL connection: file:/opt/apache-doris/fe/jdbc_drivers/…
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers
+    restart: unless-stopped
+    # 单 BE 开发环境：只要 FE 能列出至少一个 Alive 的 BE 即通过；密码与 .env 中 DORIS_PASSWORD 一致（有则 MYSQL_PWD，无则空）
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          if [ -n "$$DORIS_ROOT_PASSWORD" ]; then export MYSQL_PWD="$$DORIS_ROOT_PASSWORD"; fi
+          && mysql -h 172.30.0.2 -P 9030 -uroot -e 'SHOW BACKENDS\G' 2>/dev/null | grep -qiE 'Alive:\s*true'
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 210s
+
+volumes:
+  langfuse_postgres_data:
+    name: langfuse-doris_postgres_data
+  langfuse_minio_data:
+    name: langfuse-doris_minio_data
+  doris_fe_meta:
+    name: langfuse-doris_doris_fe_meta
+  doris_be_storage:
+    name: langfuse-doris_doris_be_storage
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.200.0.0/24
+          gateway: 10.200.0.1
+  doris_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

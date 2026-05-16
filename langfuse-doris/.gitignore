@@ -1,0 +1,2 @@
+.env
+doris-config/jdbc_drivers/*.jar

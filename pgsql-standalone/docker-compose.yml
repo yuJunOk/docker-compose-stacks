@@ -1,0 +1,26 @@
+# 单机 PostgreSQL：数据持久化命名卷；默认仅本机可连（见 README 改绑地址时的安全说明）。
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: pgsql-standalone
+    restart: unless-stopped
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgsql-data:/var/lib/postgresql/data
+    environment:
+      - TZ=${TZ:-UTC}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgsql-data:
+    name: pgsql-data

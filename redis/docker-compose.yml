@@ -1,0 +1,34 @@
+services:
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_USERNAME: ${REDIS_USERNAME:-default}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ "$$REDIS_USERNAME" = "default" ]; then
+          exec redis-server --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --user "$$REDIS_USERNAME" on ">$$REDIS_PASSWORD" "~*" "&*" "+@all" --user default off
+        fi
+    ports:
+      - "${REDIS_BIND:-127.0.0.1}:${REDIS_HOST_PORT:-6379}:6379"
+    # 镜像声明 VOLUME /data；挂命名卷避免匿名哈希卷；默认未开 AOF，键仍在内存，重启后业务数据仍会丢
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'if [ "$$REDIS_USERNAME" = "default" ]; then redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG; else redis-cli --user "$$REDIS_USERNAME" -a "$$REDIS_PASSWORD" ping | grep -q PONG; fi',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  redis_data:
+    name: redis_data

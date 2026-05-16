@@ -1,0 +1,28 @@
+# 对齐官方：https://hermes-agent.nousresearch.com/docs/zh-Hans/user-guide/docker
+# 数据目录在容器内为 /opt/data；HTTP API 与 Dashboard 端口对宿主机全接口开放（生产请配防火墙 + 强密钥）。
+
+services:
+  hermes-agent:
+    image: ${HERMES_AGENT_IMAGE:-nousresearch/hermes-agent:latest}
+    container_name: hermes-agent
+    restart: unless-stopped
+    command: gateway run
+    shm_size: "1gb"
+    ports:
+      - "8642:8642"
+      - "9119:9119"
+    volumes:
+      - hermes-agent-data:/opt/data
+    environment:
+      - HERMES_DASHBOARD=1
+      - TZ=${TZ:-UTC}
+      - HERMES_UID=${HERMES_UID:-1000}
+      - HERMES_GID=${HERMES_GID:-1000}
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${API_SERVER_KEY:?set API_SERVER_KEY in .env (min 8 chars)}
+      - API_SERVER_CORS_ORIGINS=${API_SERVER_CORS_ORIGINS:-*}
+
+volumes:
+  hermes-agent-data:
+    name: hermes-agent-data
