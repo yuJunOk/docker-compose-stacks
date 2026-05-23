@@ -1,0 +1,12 @@
+# JDBC Drivers
+
+将 JDBC 驱动 jar 包放在此目录，用于 Doris JDBC Catalog 连接外部数据库。
+
+常用驱动：
+- PostgreSQL: postgresql-42.x.x.jar
+- MySQL: mysql-connector-java-8.x.x.jar
+- SQL Server: mssql-jdbc-12.x.x.jre8.jar
+
+下载地址：
+- https://jdbc.postgresql.org/download/
+- https://dev.mysql.com/downloads/connector/j/
