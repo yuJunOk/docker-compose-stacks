@@ -1,3 +1,30 @@
+# 默认：1 FE + 3 BE（副本数默认可为 3）。单机轻量请用 docker-compose.single.yml
+
+x-be-common: &be-common
+  image: apache/doris:be-2.1.11
+  restart: unless-stopped
+  shm_size: "1gb"
+  environment:
+    - FE_SERVERS=fe1:172.30.0.2:9010
+  depends_on:
+    doris_fe:
+      condition: service_healthy
+  networks:
+    doris_internal: {}
+  volumes:
+    - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
+
+x-be-healthcheck: &be-healthcheck
+  test:
+    - CMD-SHELL
+    - >
+      c=$$(mysql -h 172.30.0.2 -P 9030 -uroot -e 'SHOW BACKENDS\G' 2>/dev/null | grep -c 'Alive: true' || true);
+      test "$$c" -ge 3
+  interval: 15s
+  timeout: 10s
+  retries: 30
+  start_period: 300s
+
 services:
   doris_fe:
     image: apache/doris:fe-2.1.11
@@ -17,7 +44,6 @@ services:
     volumes:
       - doris_fe_meta:/opt/apache-doris/fe/doris-meta
       - ./doris-config/fe_custom.conf:/opt/apache-doris/fe/conf/fe_custom.conf:ro
-      # JDBC 驱动目录，用于 JDBC Catalog 连接外部数据库（如 PostgreSQL、MySQL）
       - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
     healthcheck:
       test:
@@ -29,44 +55,66 @@ services:
       retries: 18
       start_period: 120s
 
-  doris_be:
-    image: apache/doris:be-2.1.11
-    hostname: doris_be
-    container_name: doris_be
-    restart: unless-stopped
+  doris_be01:
+    <<: *be-common
+    hostname: doris_be01
+    container_name: doris_be01
     environment:
       - FE_SERVERS=fe1:172.30.0.2:9010
       - BE_ADDR=172.30.0.3:9050
-    depends_on:
-      doris_fe:
-        condition: service_healthy
     ports:
       - "8040:8040"
-      - "8060:8060"
-      - "9050:9050"
-      - "9060:9060"
     networks:
       doris_internal:
         ipv4_address: 172.30.0.3
     volumes:
-      - doris_be_storage:/opt/apache-doris/be/storage
-      # JDBC 驱动目录，BE 执行 JDBC 外查时需要（如 PostgreSQL、MySQL）
+      - doris_be_storage_01:/opt/apache-doris/be/storage
       - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >
-          mysql -h 172.30.0.2 -P 9030 -uroot -e 'SHOW BACKENDS\G' 2>/dev/null | grep -qiE 'Alive:\s*true'
-      interval: 15s
-      timeout: 10s
-      retries: 30
-      start_period: 210s
+    healthcheck: *be-healthcheck
+
+  doris_be02:
+    <<: *be-common
+    hostname: doris_be02
+    container_name: doris_be02
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - BE_ADDR=172.30.0.4:9050
+    ports:
+      - "8041:8040"
+    networks:
+      doris_internal:
+        ipv4_address: 172.30.0.4
+    volumes:
+      - doris_be_storage_02:/opt/apache-doris/be/storage
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
+    healthcheck: *be-healthcheck
+
+  doris_be03:
+    <<: *be-common
+    hostname: doris_be03
+    container_name: doris_be03
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - BE_ADDR=172.30.0.5:9050
+    ports:
+      - "8042:8040"
+    networks:
+      doris_internal:
+        ipv4_address: 172.30.0.5
+    volumes:
+      - doris_be_storage_03:/opt/apache-doris/be/storage
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
+    healthcheck: *be-healthcheck
 
 volumes:
   doris_fe_meta:
     name: doris_fe_meta
-  doris_be_storage:
-    name: doris_be_storage
+  doris_be_storage_01:
+    name: doris_be_storage_01
+  doris_be_storage_02:
+    name: doris_be_storage_02
+  doris_be_storage_03:
+    name: doris_be_storage_03
 
 networks:
   doris_internal:

@@ -1,0 +1,78 @@
+# 1 FE + 1 BE（单机开发）。使用：docker compose -f docker-compose.single.yml up -d
+# 建表须 PROPERTIES ("replication_num" = "1")
+
+services:
+  doris_fe:
+    image: apache/doris:fe-2.1.11
+    hostname: doris_fe
+    container_name: doris_fe
+    restart: unless-stopped
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - FE_ID=1
+    ports:
+      - "8030:8030"
+      - "9030:9030"
+      - "9010:9010"
+    networks:
+      doris_internal:
+        ipv4_address: 172.30.0.2
+    volumes:
+      - doris_fe_meta:/opt/apache-doris/fe/doris-meta
+      - ./doris-config/fe_custom.conf:/opt/apache-doris/fe/conf/fe_custom.conf:ro
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          mysql -h 127.0.0.1 -P 9030 -uroot -e 'SELECT 1' 2>/dev/null || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  doris_be:
+    image: apache/doris:be-2.1.11
+    hostname: doris_be
+    container_name: doris_be
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      - FE_SERVERS=fe1:172.30.0.2:9010
+      - BE_ADDR=172.30.0.3:9050
+    depends_on:
+      doris_fe:
+        condition: service_healthy
+    ports:
+      - "8040:8040"
+      - "8060:8060"
+      - "9050:9050"
+      - "9060:9060"
+    networks:
+      doris_internal:
+        ipv4_address: 172.30.0.3
+    volumes:
+      - doris_be_storage:/opt/apache-doris/be/storage
+      - ./doris-config/jdbc_drivers:/opt/apache-doris/fe/jdbc_drivers:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          mysql -h 172.30.0.2 -P 9030 -uroot -e 'SHOW BACKENDS\G' 2>/dev/null | grep -qiE 'Alive:\s*true'
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 210s
+
+volumes:
+  doris_fe_meta:
+    name: doris_fe_meta
+  doris_be_storage:
+    name: doris_be_storage
+
+networks:
+  doris_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
