@@ -1,0 +1,34 @@
+# 单机 SVN 服务端（svnserve，svn:// 协议）：
+# 首次启动自动创建仓库与管理员账号（见 docker-entrypoint.sh）；数据持久化到命名卷；默认仅本机可连。
+
+services:
+  svn:
+    image: ${SVN_IMAGE:-garethflowers/svn-server:1.8.1}
+    container_name: svn-server
+    restart: unless-stopped
+    ports:
+      # 默认只绑本机回环；需局域网访问时把 SVN_BIND 改为 0.0.0.0（见 README 安全说明）
+      - "${SVN_BIND:-127.0.0.1}:${SVN_PORT:-3690}:3690"
+    volumes:
+      # 镜像声明 VOLUME /var/opt/svn；显式挂命名卷，避免匿名哈希卷
+      - svn-data:/var/opt/svn
+      # 首启初始化脚本：建仓并写入 svnserve.conf / passwd / authz（须保持 LF 行尾，见 .gitattributes）
+      - ./docker-entrypoint.sh:/usr/local/bin/svn-entrypoint.sh:ro
+    environment:
+      - TZ=${TZ:-UTC}
+      # 以下三项仅在「仓库首次创建」时生效；仓库已存在后改 .env 不会改动仓内账号
+      - SVN_REPO=${SVN_REPO:-repo}
+      - SVN_USERNAME=${SVN_USERNAME:-svnuser}
+      - SVN_PASSWORD=${SVN_PASSWORD:?请在 .env 中设置 SVN_PASSWORD}
+    entrypoint: ["/bin/sh", "/usr/local/bin/svn-entrypoint.sh"]
+    healthcheck:
+      # 与镜像上游 HEALTHCHECK 对齐：3690 端口处于监听即视为就绪
+      test: ["CMD-SHELL", "netstat -ln | grep -q ':3690'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  svn-data:
+    name: svn-data

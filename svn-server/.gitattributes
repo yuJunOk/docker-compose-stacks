@@ -1,0 +1,2 @@
+# 该脚本会绑定挂载进 Linux 容器执行，必须为 LF 行尾（Windows 检出时防 CRLF）
+docker-entrypoint.sh text eol=lf

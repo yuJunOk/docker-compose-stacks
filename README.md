@@ -16,6 +16,7 @@
 | [rustfs](./rustfs/) | 单机 [RustFS](https://github.com/rustfs/rustfs)（S3 兼容），Web 控制台 |
 | [hermes-agent](./hermes-agent/) | [Hermes Agent](https://github.com/EKKOLearnAI/hermes-agent) 网关 + Dashboard |
 | [langfuse-doris](./langfuse-doris/) | Langfuse + Apache Doris + Postgres + Redis + MinIO 联调栈 |
+| [svn-server](./svn-server/) | 单机 SVN 服务端（svnserve / `svn://`），首启自动建仓与账号，命名卷 |
 
 子目录 **README** 含概览表、部署、验证与参考链接；请进入对应目录按文档操作。
 
@@ -66,7 +67,7 @@ docker compose version
 
 ## 仓库约定
 
-新增或修订子项目文档时，请遵循 [docker-compose-readme-guidelines.md](./docker-compose-readme-guidelines.md)（卷命名、官方文档对齐、跨平台验证写法等）。
+新增或修订子项目文档时，请遵循 [编排文档规范.md](./编排文档规范.md)（卷命名、官方文档对齐、跨平台验证写法等）。
 
 ---
 
