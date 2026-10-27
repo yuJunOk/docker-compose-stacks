@@ -1,0 +1,44 @@
+<!-- 公共：集群拓扑 + ZooKeeper；各节点通过 config.d 自动加载 -->
+<clickhouse>
+    <listen_host>::</listen_host>
+
+    <remote_servers>
+        <!-- 1 分片 × 3 副本；Distributed / ON CLUSTER 用此名 -->
+        <cluster_1s3r>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>clickhouse-node1</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse-node2</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse-node3</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster_1s3r>
+    </remote_servers>
+
+    <zookeeper>
+        <node>
+            <host>zookeeper1</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>zookeeper2</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>zookeeper3</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+</clickhouse>

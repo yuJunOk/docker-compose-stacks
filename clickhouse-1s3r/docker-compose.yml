@@ -1,0 +1,170 @@
+# ClickHouse 1 分片 × 3 副本 + ZooKeeper 三节点；命名卷持久化；默认仅本机可连（见 README）。
+
+x-clickhouse-common: &clickhouse-common
+  image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.8}
+  restart: unless-stopped
+  ulimits:
+    nofile:
+      soft: 262144
+      hard: 262144
+  environment:
+    TZ: ${TZ:-UTC}
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+    CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}
+  networks:
+    - clickhouse_1s3r_net
+  depends_on:
+    zookeeper1:
+      condition: service_healthy
+    zookeeper2:
+      condition: service_healthy
+    zookeeper3:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget --spider -q 'http://127.0.0.1:8123/ping' || exit 1"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 60s
+
+x-zookeeper-common: &zookeeper-common
+  image: ${ZOOKEEPER_IMAGE:-zookeeper:3.9}
+  restart: unless-stopped
+  environment:
+    ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2181 server.3=zookeeper3:2888:3888;2181
+    ZOO_STANDALONE_ENABLED: "false"
+    ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+    ZOO_AUTOPURGE_PURGEINTERVAL: 24
+    ZOO_AUTOPURGE_SNAPRETAINCOUNT: 5
+  networks:
+    - clickhouse_1s3r_net
+  healthcheck:
+    test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep imok"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 20s
+
+services:
+  clickhouse-node1:
+    <<: *clickhouse-common
+    hostname: clickhouse-node1
+    container_name: clickhouse-1s3r-node1
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_HTTP_PORT_1:-18124}:8123"
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_NATIVE_PORT_1:-19001}:9000"
+    volumes:
+      - ch_node1_data:/var/lib/clickhouse
+      - ch_node1_logs:/var/log/clickhouse-server
+      - ./config/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/node1/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+
+  clickhouse-node2:
+    <<: *clickhouse-common
+    hostname: clickhouse-node2
+    container_name: clickhouse-1s3r-node2
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_HTTP_PORT_2:-18125}:8123"
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_NATIVE_PORT_2:-19002}:9000"
+    volumes:
+      - ch_node2_data:/var/lib/clickhouse
+      - ch_node2_logs:/var/log/clickhouse-server
+      - ./config/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/node2/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+
+  clickhouse-node3:
+    <<: *clickhouse-common
+    hostname: clickhouse-node3
+    container_name: clickhouse-1s3r-node3
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_HTTP_PORT_3:-18126}:8123"
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${CH_NATIVE_PORT_3:-19003}:9000"
+    volumes:
+      - ch_node3_data:/var/lib/clickhouse
+      - ch_node3_logs:/var/log/clickhouse-server
+      - ./config/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/node3/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+
+  zookeeper1:
+    <<: *zookeeper-common
+    hostname: zookeeper1
+    container_name: clickhouse-1s3r-zk1
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${ZK_CLIENT_PORT_1:-2181}:2181"
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2181 server.3=zookeeper3:2888:3888;2181
+      ZOO_STANDALONE_ENABLED: "false"
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_AUTOPURGE_PURGEINTERVAL: 24
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 5
+    volumes:
+      - zk1_data:/data
+      - zk1_datalog:/datalog
+
+  zookeeper2:
+    <<: *zookeeper-common
+    hostname: zookeeper2
+    container_name: clickhouse-1s3r-zk2
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${ZK_CLIENT_PORT_2:-2182}:2181"
+    environment:
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2181 server.3=zookeeper3:2888:3888;2181
+      ZOO_STANDALONE_ENABLED: "false"
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_AUTOPURGE_PURGEINTERVAL: 24
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 5
+    volumes:
+      - zk2_data:/data
+      - zk2_datalog:/datalog
+
+  zookeeper3:
+    <<: *zookeeper-common
+    hostname: zookeeper3
+    container_name: clickhouse-1s3r-zk3
+    ports:
+      - "${CLICKHOUSE_BIND:-127.0.0.1}:${ZK_CLIENT_PORT_3:-2183}:2181"
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2181 server.3=zookeeper3:2888:3888;2181
+      ZOO_STANDALONE_ENABLED: "false"
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_AUTOPURGE_PURGEINTERVAL: 24
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 5
+    volumes:
+      - zk3_data:/data
+      - zk3_datalog:/datalog
+
+networks:
+  clickhouse_1s3r_net:
+    name: clickhouse_1s3r_net
+    driver: bridge
+
+volumes:
+  ch_node1_data:
+    name: clickhouse_1s3r_node1_data
+  ch_node1_logs:
+    name: clickhouse_1s3r_node1_logs
+  ch_node2_data:
+    name: clickhouse_1s3r_node2_data
+  ch_node2_logs:
+    name: clickhouse_1s3r_node2_logs
+  ch_node3_data:
+    name: clickhouse_1s3r_node3_data
+  ch_node3_logs:
+    name: clickhouse_1s3r_node3_logs
+  zk1_data:
+    name: clickhouse_1s3r_zk1_data
+  zk1_datalog:
+    name: clickhouse_1s3r_zk1_datalog
+  zk2_data:
+    name: clickhouse_1s3r_zk2_data
+  zk2_datalog:
+    name: clickhouse_1s3r_zk2_datalog
+  zk3_data:
+    name: clickhouse_1s3r_zk3_data
+  zk3_datalog:
+    name: clickhouse_1s3r_zk3_datalog

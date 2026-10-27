@@ -11,8 +11,9 @@
 | 目录 | 说明 |
 |------|------|
 | [redis](./redis/) | 单机 Redis 7（Alpine），密码认证，命名卷 |
-| [pgsql-standalone](./pgsql-standalone/) | 单机 PostgreSQL 16（Alpine），命名卷 |
-| [clickhouse-standalone](./clickhouse-standalone/) | 单机 ClickHouse，命名卷 |
+| [pgsql](./pgsql/) | 单机 PostgreSQL 16（Alpine），命名卷 |
+| [clickhouse](./clickhouse/) | 单机 ClickHouse，命名卷 |
+| [clickhouse-1s3r](./clickhouse-1s3r/) | ClickHouse 1 分片 × 3 副本 + ZooKeeper，命名卷 |
 | [rustfs](./rustfs/) | 单机 [RustFS](https://github.com/rustfs/rustfs)（S3 兼容），Web 控制台 |
 | [hermes-agent](./hermes-agent/) | [Hermes Agent](https://github.com/EKKOLearnAI/hermes-agent) 网关 + Dashboard |
 | [langfuse-doris](./langfuse-doris/) | Langfuse + Apache Doris + Postgres + Redis + MinIO 联调栈 |

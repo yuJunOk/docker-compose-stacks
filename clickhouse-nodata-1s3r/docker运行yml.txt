@@ -1,1 +1,0 @@
-docker-compose -f docker-compose-clickhouse-nodata-1s3r.yml up -d

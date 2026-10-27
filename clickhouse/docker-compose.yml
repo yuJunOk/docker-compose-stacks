@@ -3,7 +3,7 @@
 services:
   clickhouse:
     image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.8}
-    container_name: clickhouse-standalone
+    container_name: clickhouse
     restart: unless-stopped
     ulimits:
       nofile:

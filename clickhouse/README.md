@@ -1,4 +1,4 @@
-# ClickHouse Standalone（单机 Docker Compose）
+# ClickHouse（单机 Docker Compose）
 
 [ClickHouse](https://clickhouse.com/) 本机单节点示例：HTTP **8123**、原生协议宿主机 **19000**（容器内仍为 **9000**）。官方镜像说明：[Docker Hub](https://hub.docker.com/r/clickhouse/clickhouse-server)。
 
@@ -50,7 +50,7 @@ docker compose up -d
 docker compose ps
 ```
 
-**`clickhouse-standalone`** 状态为 **`healthy`** 即通过（首次可能需数十秒）。
+**`clickhouse`** 状态为 **`healthy`** 即通过（首次可能需数十秒）。
 
 ```bash
 docker compose exec clickhouse clickhouse-client --query "SELECT version()"
